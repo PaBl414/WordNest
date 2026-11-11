@@ -1,0 +1,16 @@
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
+frontend/dist/
+data/
+*.sqlite*
+*.log
+config.json
+outputs/
+work/
+frontend/test-results/
+frontend/playwright-report/
+.tools/
+.venv.incomplete-*/
+dist/

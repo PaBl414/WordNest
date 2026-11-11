@@ -1,0 +1,2 @@
+import {defineConfig} from 'vite';
+export default defineConfig({server:{host:'127.0.0.1',proxy:{'/api':{target:'http://127.0.0.1:8000',changeOrigin:true,configure(proxy){proxy.on('proxyReq',(outgoing,incoming)=>{if(incoming.headers.origin==='http://127.0.0.1:5173'||incoming.headers.origin==='http://localhost:5173')outgoing.setHeader('origin','http://127.0.0.1:8000');});}}}},build:{outDir:'dist'}});
