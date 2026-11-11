@@ -12,8 +12,8 @@ from wordnest import paths
 class DesktopTests(unittest.TestCase):
     def test_bundled_database_is_outside_extracted_resources(self):
         with tempfile.TemporaryDirectory() as directory:
-            with patch.dict(os.environ, {'LOCALAPPDATA': directory}, clear=True), patch.object(sys, 'frozen', True, create=True):
-                self.assertEqual(paths.data_directory(), Path(directory) / 'WordNest' / 'data')
+            with patch.dict(os.environ, {}, clear=True), patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'executable', str(Path(directory) / 'WordNest.exe')):
+                self.assertEqual(paths.data_directory(), Path(directory) / 'data')
                 self.assertFalse(paths.data_directory().is_relative_to(paths.resource_root()))
 
     def test_source_retains_existing_database_location(self):
@@ -38,7 +38,7 @@ class DesktopTests(unittest.TestCase):
 
     def test_failed_server_does_not_open_browser(self):
         from types import SimpleNamespace
-        with patch.object(desktop, 'notify'), patch.object(desktop.webbrowser, 'open') as browser:
+        with patch.object(desktop.webbrowser, 'open') as browser:
             with self.assertRaises(RuntimeError):
                 desktop.wait_for_server('http://127.0.0.1:1/', SimpleNamespace(started=False), SimpleNamespace(is_alive=lambda: False))
             browser.assert_not_called()

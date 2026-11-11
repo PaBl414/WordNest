@@ -27,7 +27,7 @@ class Store:
         self.path = str(path)
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with self.db() as db:
-            if db.execute('PRAGMA user_version').fetchone()[0] > 1:
+            if db.execute('PRAGMA user_version').fetchone()[0] > 2:
                 raise Problem('Ta baza pochodzi z nowszej wersji WordNest. Zaktualizuj aplikację.')
             db.executescript('''
             PRAGMA journal_mode=WAL;
@@ -36,7 +36,9 @@ class Store:
             CREATE TABLE IF NOT EXISTS progress(word_id TEXT NOT NULL REFERENCES words(id), direction TEXT NOT NULL, stage INTEGER NOT NULL, due TEXT NOT NULL, reviewed TEXT NOT NULL, PRIMARY KEY(word_id,direction));
             CREATE TABLE IF NOT EXISTS dictionary_cache(term TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched REAL NOT NULL, used REAL NOT NULL);
             CREATE INDEX IF NOT EXISTS word_filters ON words(language,archived,selected,topic,level);
-            PRAGMA user_version=1;
+            CREATE TABLE IF NOT EXISTS word_sets(id TEXT PRIMARY KEY, language TEXT NOT NULL, name TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS set_words(set_id TEXT NOT NULL REFERENCES word_sets(id), word_id TEXT NOT NULL REFERENCES words(id), PRIMARY KEY(set_id,word_id));
+            PRAGMA user_version=2;
             ''')
         self.seed()
 
@@ -61,6 +63,51 @@ class Store:
                 ident = str(uuid.uuid5(uuid.NAMESPACE_URL, 'wordnest:' + item['language'] + ':' + item['term']))
                 db.execute('INSERT OR IGNORE INTO words(id,language,term,meaning,topic,level,source,normalized) VALUES(?,?,?,?,?,?,?,?)', (ident,item['language'],item['term'],item['meaning'],item['topic'],item['level'],'builtin',norm(item['term'])+'|'+norm(item['meaning'])))
 
+    def sets(self, language):
+        if language not in LANGUAGES: raise Problem('Nieznany jezyk.')
+        with self.db() as db:
+            result=[{'id':'builtin','name':'Wbudowany (200 slow)','count':db.execute("SELECT count(*) FROM words WHERE language=? AND source='builtin' AND archived=0",(language,)).fetchone()[0]},
+                    {'id':'custom','name':'Wszystkie wlasne slowa','count':db.execute("SELECT count(*) FROM words WHERE language=? AND source='custom' AND archived=0",(language,)).fetchone()[0]}]
+            result += [dict(r) for r in db.execute('SELECT s.id,s.name,(SELECT count(*) FROM set_words sw JOIN words w ON w.id=sw.word_id WHERE sw.set_id=s.id AND w.archived=0) AS count FROM word_sets s WHERE s.language=? ORDER BY s.name,s.id',(language,))]
+        return result
+
+    def create_set(self, language, name):
+        if not isinstance(language,str) or language not in LANGUAGES: raise Problem('Nieznany jezyk.')
+        if not isinstance(name,str) or not name.strip() or len(name.strip())>100: raise Problem('Nazwa zbioru musi miec 1-100 znakow.')
+        ident=str(uuid.uuid4())
+        with self.db() as db:
+            db.execute('INSERT INTO word_sets VALUES(?,?,?)',(ident,language,name.strip()))
+        return {'id':ident,'name':name.strip(),'count':0}
+
+    def set_filter(self, db, language, set_id):
+        if not isinstance(set_id,str): raise Problem('Nieprawidlowy zbior.')
+        if not set_id: return '',[]
+        if set_id in ('builtin','custom'): return ' AND source=?',[set_id]
+        if not db.execute('SELECT 1 FROM word_sets WHERE id=? AND language=?',(set_id,language)).fetchone(): raise Problem('Nie znaleziono zbioru dla tego jezyka.',404)
+        return ' AND id IN (SELECT word_id FROM set_words WHERE set_id=?)',[set_id]
+
+    def builtin_candidates(self, set_id, q=''):
+        with self.db() as db:
+            group=db.execute('SELECT language FROM word_sets WHERE id=?',(set_id,)).fetchone()
+            if not group: raise Problem('Nie znaleziono wlasnego zbioru.',404)
+            members={r[0] for r in db.execute('SELECT word_id FROM set_words WHERE set_id=?',(set_id,))}
+        result=self.words(group['language'],q=q,set_id='builtin',limit=20)
+        for word in result['items']: word['in_set']=word['id'] in members
+        return result
+
+    def add_builtin_to_set(self, set_id, word_id):
+        if not isinstance(word_id,str): raise Problem('Wybierz slowo.')
+        with self.db() as db:
+            word=db.execute("SELECT * FROM words WHERE id=? AND source='builtin' AND archived=0",(word_id,)).fetchone()
+            if not word: raise Problem('Nie znaleziono wbudowanego slowa.',404)
+            self.attach_to_set(db,word_id,word['language'],set_id)
+        return {'ok':True}
+
+    def attach_to_set(self, db, word_id, language, set_id):
+        if not set_id: return
+        if not isinstance(set_id,str) or not db.execute('SELECT 1 FROM word_sets WHERE id=? AND language=?',(set_id,language)).fetchone(): raise Problem('Wybierz wlasny zbior dla tego jezyka.')
+        db.execute('INSERT OR IGNORE INTO set_words VALUES(?,?)',(set_id,word_id))
+
     @staticmethod
     def word(row):
         value = dict(row)
@@ -69,7 +116,7 @@ class Store:
         value['selected'] = bool(value['selected'])
         return value
 
-    def words(self, language='en', q='', topic='', level='', selected=False, page=1, limit=50):
+    def words(self, language='en', q='', topic='', level='', selected=False, page=1, limit=50, set_id=""):
         if not isinstance(language,str) or language not in LANGUAGES:
             raise Problem('Nieznany język.')
         limit, page = min(100, max(1,limit)), max(1,page)
@@ -84,6 +131,8 @@ class Store:
         if selected:
             sql += ' AND selected=1'
         with self.db() as db:
+            clause,extra=self.set_filter(db,language,set_id)
+            sql+=clause; params+=extra
             total = db.execute('SELECT count(*) '+sql,params).fetchone()[0]
             rows = db.execute('SELECT * '+sql+' ORDER BY topic,level,term LIMIT ? OFFSET ?',params+[limit,(page-1)*limit]).fetchall()
         return {'items':[self.word(x) for x in rows], 'total':total, 'page':page, 'limit':limit}
@@ -116,6 +165,7 @@ class Store:
                 if duplicate['archived']:
                     db.execute('UPDATE words SET archived=0,selected=1,version=version+1 WHERE id=?',(duplicate['id'],))
                     duplicate = db.execute('SELECT * FROM words WHERE id=?',(duplicate['id'],)).fetchone()
+                self.attach_to_set(db,duplicate['id'],language,data.get('set_id',''))
                 return self.word(duplicate)
             values = (language,data['term'],data['meaning'],json.dumps(data.get('variants',[])),json.dumps(data.get('polish_variants',[])),data['topic'],data.get('level','A1'),data['example'],data['example_pl'],normalized)
             if ident:
@@ -123,6 +173,7 @@ class Store:
             else:
                 ident = str(uuid.uuid4())
                 db.execute('INSERT INTO words(language,term,meaning,variants,polish_variants,topic,level,example,example_pl,normalized,id,source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',values+(ident,'custom'))
+            self.attach_to_set(db,ident,language,data.get('set_id',''))
             return self.word(db.execute('SELECT * FROM words WHERE id=?',(ident,)).fetchone())
 
     def change_word(self, ident, selected=None, archive=False):
@@ -135,11 +186,12 @@ class Store:
             else:
                 db.execute('UPDATE words SET selected=?,version=version+1 WHERE id=?',(int(bool(selected)),ident))
 
-    def create_session(self, language, mode, direction, topic='', level=''):
+    def create_session(self, language, mode, direction, topic='', level='', set_id=''):
         if not isinstance(language,str) or language not in LANGUAGES or mode not in ('flashcards','quiz','typing','matching','test') or direction not in ('to_pl','from_pl'):
             raise Problem('Nieprawidłowe ustawienia nauki.')
         with self.db() as db:
-            rows=db.execute('SELECT * FROM words WHERE language=? AND selected=1 AND archived=0 ORDER BY id',(language,)).fetchall()
+            clause,extra=self.set_filter(db,language,set_id)
+            rows=db.execute('SELECT * FROM words WHERE language=? AND selected=1 AND archived=0'+clause+' ORDER BY id',[language]+extra).fetchall()
             pool=[self.word(r) for r in rows if (not topic or r['topic']==topic) and (not level or r['level']==level)]
             if not pool: raise Problem('Dodaj słowa do kolekcji lub zmień filtry.')
             if mode=='test' and len(pool)<4: raise Problem('Test wymaga minimum 4 słów.')

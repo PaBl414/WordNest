@@ -21,6 +21,6 @@ $env:WORDNEST_DATA = Join-Path $smokeRoot 'data'
 try {
     $process = Start-Process -FilePath (Join-Path $PSScriptRoot 'dist\WordNest.exe') -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru
     if (-not $process.WaitForExit(60000)) { $process.Kill(); throw 'EXE smoke test timed out.' }
-    if ($process.ExitCode -ne 0) { throw "EXE smoke test failed. See $smokeRoot\wordnest.log" }
+    if ($process.ExitCode -ne 0) { throw "EXE smoke test failed. See $smokeRoot\data\wordnest.log" }
 } finally { $env:WORDNEST_DATA = $previousData }
 Write-Host 'Ready: dist\WordNest.exe. Share only that file; the recipient needs no Python, Node.js or npm.'

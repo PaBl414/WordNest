@@ -59,8 +59,8 @@ async def protect(request: Request,call_next):
 def config(): return {'token':token,'languages':LANGUAGES,'topics':list(DATA),'dictionary':dictionary.enabled}
 
 @app.get('/api/v1/words')
-def words(language:str='en',q:str='',topic:str='',level:str='',selected:bool=False,page:int=1,limit:int=50):
-    return store.words(language,q,topic,level,selected,page,limit)
+def words(language:str='en',q:str='',topic:str='',level:str='',selected:bool=False,page:int=1,limit:int=50,set_id:str=""):
+    return store.words(language,q,topic,level,selected,page,limit,set_id)
 
 @app.post('/api/v1/words')
 def create_word(data:dict): return store.save_word(data)
@@ -81,7 +81,7 @@ def delete_word(ident:str):
 
 @app.post('/api/v1/sessions')
 def create_session(data:dict):
-    return store.create_session(data.get('language'),data.get('mode'),data.get('direction'),data.get('topic',''),data.get('level',''))
+    return store.create_session(data.get('language'),data.get('mode'),data.get('direction'),data.get('topic',''),data.get('level',''),data.get('set_id',''))
 
 @app.get('/api/v1/sessions/{ident}')
 def get_session(ident:str): return store.session(ident)
@@ -105,3 +105,15 @@ def index():
     if not (DIST/'index.html').exists():
         return JSONResponse({'message':'Najpierw zbuduj interfejs: cd frontend, npm ci, npm run build.'},status_code=503)
     return FileResponse(DIST/'index.html',headers={'Cache-Control':'no-cache'})
+
+@app.get('/api/v1/sets')
+def sets(language:str='en'): return store.sets(language)
+
+@app.post('/api/v1/sets')
+def create_set(data:dict): return store.create_set(data.get('language'),data.get('name'))
+
+@app.get('/api/v1/sets/{ident}/builtin')
+def builtin_candidates(ident:str,q:str=''): return store.builtin_candidates(ident,q)
+
+@app.post('/api/v1/sets/{ident}/words')
+def add_builtin(ident:str,data:dict): return store.add_builtin_to_set(ident,data.get('word_id'))

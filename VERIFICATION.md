@@ -36,3 +36,31 @@ Odstępstwa od pierwotnego planu pozostają: sqlite3 zamiast SQLAlchemy/Alembic,
 - Gotowy EXE nie został jeszcze zbudowany: PyInstaller nie jest dostępny w środowisku, a próba jego instalacji zakończyła się błędem. Skrypt budowania wykonuje test gotowej paczki przed komunikatem o powodzeniu.
 - Nie sprawdzono okna Windows, otwierania przeglądarki ani uruchomienia na czystym drugim komputerze. Testy Playwright nadal nie zostały wykonane.
 - Nowe automatyczne pobieranie Pythona/Node.js przez setup.ps1 wymaga osobnej weryfikacji na komputerze bez tych narzędzi.
+
+## Aktualizacja: terminal i dane obok EXE
+
+- Dane domyslnie w data obok WordNest.exe, niezaleznie od katalogu roboczego. Log rowniez w data.
+- Usunieto okna dialogowe, wlaczono terminal i logowanie HTTP; Ctrl+C zatrzymuje serwer.
+- 29 testow przeszlo. Nowy dist/WordNest.exe zbudowano i jego test uruchomienia zakonczyl sie kodem 0.
+- Starych danych z LOCALAPPDATA nie przenosimy automatycznie.
+
+## Zbiory slow
+
+- Dodano wlasne zbiory per jezyk oraz wybor zbioru w nauce i testach.
+- Migracja SQLite 1 -> 2 zachowuje istniejace slowa i sesje.
+- Przeszlo 33 testy calego zestawu i dodatkowy test integracji HTTP zbiorow (4 testy HTTP lacznie), razem 34 rozne testy.
+- TypeScript i produkcyjny build Vite zakonczone poprawnie.
+
+## Kierunek nauki
+
+- Lista slow odwraca kolejnosc hasla i znaczenia. Kierunek zachowuje sie po odswiezeniu i jest synchronizowany ze wznowiona sesja.
+- W aktywnej sesji mozna zmienic kierunek; powstaje nowa sesja, dotychczasowe odpowiedzi pozostaja w bazie.
+- Przeszly 34 testy oraz dodatkowa regresja obu kierunkow we wszystkich pieciu trybach (35 roznych testow). Build TypeScript/Vite poprawny.
+- Dodano regresje Playwright, ale proba uruchomienia przegladarki zakonczyla sie niepowodzeniem; testow UI nie uznano za zaliczone.
+
+## Wyszukiwanie wbudowanych slow do wlasnego zbioru
+
+- Dodano wyszukiwarke hasel i polskich znaczen w wybranym wlasnym zbiorze.
+- Przypisanie przez API jest idempotentne, zachowuje identyfikator slowa i historie. Odrzuca slowa innego jezyka oraz wpisy spoza wbudowanego katalogu.
+- 36 testow pelnego zestawu i dodatkowy test HTTP wyszukiwania/przypisywania przeszly (37 roznych testow). TypeScript i Vite poprawne.
+- Testy przegladarkowe nowego panelu pozostaja niewykonane.

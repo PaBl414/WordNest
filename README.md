@@ -14,9 +14,9 @@ Skrypt wykonuje setup, instaluje PyInstaller do `.venv`, pakuje program oraz spr
 
 Wynik: `dist/WordNest.exe`. Odbiorcy przekazujesz tylko ten plik. Python, biblioteki i zbudowany interfejs są w środku; odbiorca nie potrzebuje Pythona, Node.js, npm ani uprawnień administratora.
 
-Dwuklik uruchamia lokalny serwer na wolnym porcie i otwiera przeglądarkę. Okno WordNest pozostaje otwarte podczas nauki; OK zatrzymuje serwer. Zamknięcie samej karty przeglądarki nie kończy programu. Ta wersja uruchamia się lokalnie; do LAN nadal służy `start.py`.
+Dwuklik uruchamia lokalny serwer na wolnym porcie i otwiera przeglądarkę. Terminal pokazuje adres aplikacji, katalog danych oraz logi żądań HTTP. Ctrl+C lub zamknięcie terminala zatrzymuje program. Nie pojawia się okno dialogowe. Ta wersja uruchamia się lokalnie; do LAN nadal służy `start.py`.
 
-Dane EXE: `%LOCALAPPDATA%\WordNest\data\wordnest.sqlite3`. Log: `%LOCALAPPDATA%\WordNest\wordnest.log`. Wymiana EXE nie usuwa postępów. Pierwsze uruchomienie EXE tworzy osobny profil; aby przenieść dotychczasowe dane, zatrzymaj obie wersje i skopiuj ich spójną kopię z `data/wordnest.sqlite3` do katalogu danych EXE.
+Dane są zapisywane w folderze `data` obok pliku `WordNest.exe`, niezależnie od bieżącego katalogu terminala. Baza: `data/wordnest.sqlite3`; log: `data/wordnest.log`. Katalog programu musi mieć prawo zapisu. Wymiana samego EXE zachowuje dane. Aby przenieść dane ze starej wersji, zatrzymaj program i przenieś spójną kopię bazy z `%LOCALAPPDATA%\WordNest\data` do folderu `data` obok EXE.
 
 EXE rozpakowuje składniki do katalogu tymczasowego podczas startu. Nie dołączamy Twojej bazy do pliku EXE. Po zbudowaniu sprawdź go również na drugim komputerze bez Pythona i Node.js.
 
@@ -122,7 +122,7 @@ Limit: 2 sekundy, 2 równoczesne zapytania, 30 na minutę. Cache: 7 dni, brak ha
 
 ## Baza i kopie
 
-SQLite znajduje się w `data/wordnest.sqlite3`. Nie przenoś aktywnej bazy na udział sieciowy. Alternatywny katalog można ustawić zmienną `WORDNEST_DATA`. Format schematu ma wersję 1 (`PRAGMA user_version`); przyszłe zmiany wymagają jawnej migracji. Warstwa danych używa standardowego `sqlite3`, zamiast zaplanowanego SQLAlchemy/Alembic — pozwala testować cały silnik bez instalowania pakietów.
+SQLite znajduje się w `data/wordnest.sqlite3`. Nie przenoś aktywnej bazy na udział sieciowy. Alternatywny katalog można ustawić zmienną `WORDNEST_DATA`. Format schematu ma wersję 2 (`PRAGMA user_version`); przyszłe zmiany wymagają jawnej migracji. Warstwa danych używa standardowego `sqlite3`, zamiast zaplanowanego SQLAlchemy/Alembic — pozwala testować cały silnik bez instalowania pakietów.
 
 Kopia na Windows (na Linux użyj `.venv/bin/python`):
 
@@ -157,3 +157,13 @@ Publikuj źródła, instrukcję, testy i wygenerowany `package-lock.json`. `.git
 ## Licencje
 
 Kod projektu: MIT (patrz LICENSE). Wbudowany katalog przygotowano na potrzeby WordNest, CC0 1.0. Oznaczenia A1/A2 są orientacyjne; katalog nie jest certyfikowany i przed użyciem dydaktycznym wymaga przeglądu językowego. Treści pobrane z API zachowują własne licencje i źródła; nie obejmuje ich licencja katalogu. React, Vite, TypeScript, Lucide i zależności Pythona zachowują swoje licencje — ich informacje dołączają pakiety instalowane przez menedżery zależności.
+
+## Zbiory slow
+
+W widoku Slowa wpisz nazwe i kliknij Utworz zbior. Zbior dotyczy aktualnie wybranego jezyka. Wybierz go w polu Zbior slow, a nastepnie dodaj dowolne wlasne slowa przyciskiem Dodaj slowo. Nie musza wystepowac we wbudowanym katalogu.
+
+Ten sam wybor zbioru obowiazuje przy rozpoczynaniu fiszek, quizu, wpisywania, dopasowywania i testu. Zbior Wbudowany zawiera 200 pozycji na jezyk. Wszystkie wlasne slowa obejmuja takze wpisy sprzed aktualizacji. Wszystkie zbiory lacza dostepne slowa bez duplikatow. Filtry tematu, poziomu i zaznaczenie slow do nauki nadal obowiazuja.
+
+Schemat bazy ma wersje 2. Aktualizacja z wersji 1 automatycznie dodaje tabele zbiorow i zachowuje slowa, sesje oraz postepy. Historie powtorek wspoldzieli to samo slowo wystepujace w kilku zbiorach.
+
+W wybranym wlasnym zbiorze sekcja **Dodaj z wbudowanych slow** pozwala wyszukiwac po hasle i polskim znaczeniu. Przycisk **Dodaj do zbioru** przypisuje pozycje bez tworzenia duplikatu. Slowo pozostaje we wbudowanym katalogu i zachowuje historie powtorek.

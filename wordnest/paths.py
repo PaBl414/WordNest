@@ -9,7 +9,9 @@ def resource_root():
 
 
 def desktop_directory():
-    return Path(os.environ.get('LOCALAPPDATA') or (Path.home() / 'AppData' / 'Local')) / 'WordNest'
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).resolve().parent
+    return resource_root()
 
 
 def data_directory():

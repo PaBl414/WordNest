@@ -1,6 +1,5 @@
-"""Windows EXE entry point: local server, browser and native stop dialog."""
+"""Windows EXE entry point: local server, browser and connection console."""
 import argparse
-import ctypes
 import logging
 from logging.handlers import RotatingFileHandler
 import os
@@ -12,25 +11,11 @@ import time
 import urllib.request
 import webbrowser
 
-from wordnest.paths import desktop_directory, resource_root
-
-
-def notify(message, error=False):
-    if sys.platform == 'win32':
-        # No GUI framework or separately installed Tcl/Tk is needed.
-        dialog = ctypes.windll.user32.MessageBoxW
-        dialog.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint]
-        dialog.restype = ctypes.c_int
-        dialog(None, message, 'WordNest', 0x10 if error else 0x40)
-    else:
-        print(message)
-        if not error:
-            input('Enter: zakoncz WordNest. ')
+from wordnest.paths import data_directory, resource_root
 
 
 def configure_environment():
-    base = desktop_directory()
-    data = Path(os.environ.get('WORDNEST_DATA') or base / 'data').expanduser().resolve()
+    data = data_directory()
     data.mkdir(parents=True, exist_ok=True)
     # Source runs retain their original data/ directory; EXE has its own profile.
     os.environ['WORDNEST_DATA'] = str(data)
@@ -66,10 +51,10 @@ def main(argv=None):
         if not (dist / 'index.html').is_file() or not (dist / 'assets').is_dir():
             raise RuntimeError('Brak interfejsu w paczce. Zbuduj WordNest ponownie przez build-exe.ps1.')
         data = configure_environment()
-        log = data.parent / 'wordnest.log'
+        log = data / 'wordnest.log'
         logging.basicConfig(
             level=logging.INFO,
-            handlers=[RotatingFileHandler(log, maxBytes=2_000_000, backupCount=2, encoding='utf-8')],
+            handlers=[logging.StreamHandler(sys.stdout), RotatingFileHandler(log, maxBytes=2_000_000, backupCount=2, encoding='utf-8')],
             format='%(asctime)s %(levelname)s %(name)s: %(message)s', force=True,
         )
         # Hold the selected port until Uvicorn takes ownership; no port race.
@@ -84,28 +69,32 @@ def main(argv=None):
         server = uvicorn.Server(uvicorn.Config(
             app, host='127.0.0.1', port=port, proxy_headers=False,
             loop='asyncio', http='h11', ws='none', lifespan='off',
-            log_config=None, access_log=False,
+            log_config=None, access_log=True,
         ))
         thread = threading.Thread(target=server.run, kwargs={'sockets': [bound_socket]}, daemon=True)
         thread.start()
         url = f'http://127.0.0.1:{port}/'
         wait_for_server(url, server, thread)
         if not args.smoke_test:
-            opened = webbrowser.open(url)
-            message = ('WordNest jest uruchomiony.\n\n'
-                       f'Adres aplikacji: {url}\n'
-                       f'Twoje dane: {data}\n\n'
-                       'Zostaw to okno otwarte podczas nauki.\n'
-                       'Kliknij OK, aby zatrzymac WordNest.\n'
-                       'Zamkniecie karty przegladarki nie zatrzymuje programu.')
-            if not opened:
-                message = 'Otworz adres recznie w przegladarce.\n\n' + message
-            notify(message)
+            print(f'WordNest: {url}', flush=True)
+            print(f'Dane: {data}', flush=True)
+            print('Zatrzymanie: Ctrl+C lub zamkniecie terminala.', flush=True)
+            if not webbrowser.open(url):
+                print('Otworz powyzszy adres w przegladarce.', flush=True)
+            while thread.is_alive():
+                thread.join(timeout=0.5)
+            raise RuntimeError('Serwer WordNest zakonczyl prace niespodziewanie.')
+        return 0
+    except KeyboardInterrupt:
         return 0
     except Exception as exc:
         logging.exception('WordNest startup failed')
         if not args.smoke_test:
-            notify(f'Nie mozna uruchomic WordNest.\n\n{exc}', error=True)
+            print(f'Nie mozna uruchomic WordNest: {exc}', flush=True)
+            try:
+                input('Nacisnij Enter, aby zamknac okno...')
+            except (EOFError, KeyboardInterrupt):
+                pass
         return 1
     finally:
         if server is not None:
